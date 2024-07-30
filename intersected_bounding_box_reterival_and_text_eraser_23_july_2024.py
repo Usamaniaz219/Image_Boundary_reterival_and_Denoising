@@ -6,6 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.validation import make_valid
 import time
+import re
 
 def validate_polygon(polygon):
     try:
@@ -91,37 +92,93 @@ def process_image(mask_image_path, bbox_image_path, output_dir):
     print(f"Processing complete for: {mask_image_name}")
     return output_mask
 
-def process_images(input_dir, output_dir, bounding_box_path):
+
+def process_images(input_dir, output_dir, bounding_box_dir):
     os.makedirs(output_dir, exist_ok=True)
     start_time = time.time()
+    file_count = 0
+    
     for root, _, files in os.walk(input_dir):
         for filename in files:
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                file_count += 1
                 image_path = os.path.join(root, filename)
                 mask_image_name = os.path.splitext(os.path.basename(image_path))[0]
+                print("mask image name :",mask_image_name)
+                match = re.match(r'(.+)_\d+_mask', mask_image_name )
+                if match:
+                    mask_image_name1  = match.group(1)
+                # return base_name
+                print("Mask image name 1:",mask_image_name1)
                 ori_image_mask = cv2.imread(image_path)
-                bbox_mask = process_image(image_path, bounding_box_path,output_dir)
-                bbox_mask = cv2.merge([bbox_mask, bbox_mask, bbox_mask])
+                
+                bbox_mask_path = os.path.join(bounding_box_dir, f"{mask_image_name1}_text_mask_text_mask.png")
+                if not os.path.exists(bbox_mask_path):
+                    print(f"Bounding box mask not found for {filename}")
+                    continue
+                
+                bbox_mask = process_image(image_path, bbox_mask_path, output_dir)
                 if bbox_mask is None:
                     continue
-                # print(f'ori_image_mask shape: {ori_image_mask.shape}')
-                # print(f'bbox_mask: {bbox_mask.shape}')
+
+                bbox_mask = cv2.merge([bbox_mask, bbox_mask, bbox_mask])
                 bbox_mask = cv2.resize(bbox_mask, (ori_image_mask.shape[1], ori_image_mask.shape[0]))
+                
                 ori_image_mask = ori_image_mask.astype(np.uint8)
                 bbox_mask = bbox_mask.astype(np.uint8)
                 mask_with_bounding_boxes = cv2.bitwise_or(ori_image_mask, bbox_mask)
+                
                 output_subdir = os.path.join(output_dir, os.path.basename(os.path.dirname(image_path)))
+                output_subdir = f"{output_subdir}_intersection_of_0.1"
                 os.makedirs(output_subdir, exist_ok=True)
+                
                 output_file_path = os.path.join(output_subdir, f"{mask_image_name}_output_mask.jpg")
                 cv2.imwrite(output_file_path, mask_with_bounding_boxes)
-
+                
                 print(f"Processed {filename} in {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
-    input_directory = '/home/usama/Denoised_mask_results_3_july_2024/ca_dublin/'
-    bounding_box_path = "/home/usama/EasyOcr_based_text_Erasing_latest_for_using/text_masks_results_july_13_2024_text_threshold_0.01/ca_dublintext_masktext_mask.png"
-    output_directory = '/home/usama/text_erased_using_reteival_results_july_23_2024/'
-    process_images(input_directory, output_directory, bounding_box_path)
+    input_directory = '/home/usama/Denoised_mask_results_3_july_2024/'
+    bounding_box_dir = '/home/usama/EasyOCR_high_resolution_text_localization/text_filled_bounding_box_masks_results_july_27_2024/'
+    output_directory = '/home/usama/text_erased_using_reteival_results_july_29_2024/'
+    
+    process_images(input_directory, output_directory, bounding_box_dir)
+
+
+# def process_images(input_dir, output_dir, bounding_box_path):
+#     os.makedirs(output_dir, exist_ok=True)
+#     start_time = time.time()
+#     for root, _, files in os.walk(input_dir):
+#         for filename in files:
+#             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+#                 image_path = os.path.join(root, filename)
+#                 mask_image_name = os.path.splitext(os.path.basename(image_path))[0]
+#                 ori_image_mask = cv2.imread(image_path)
+#                 bbox_mask = process_image(image_path, bounding_box_path,output_dir)
+#                 bbox_mask = cv2.merge([bbox_mask, bbox_mask, bbox_mask])
+#                 if bbox_mask is None:
+#                     continue
+#                 # print(f'ori_image_mask shape: {ori_image_mask.shape}')
+#                 # print(f'bbox_mask: {bbox_mask.shape}')
+#                 bbox_mask = cv2.resize(bbox_mask, (ori_image_mask.shape[1], ori_image_mask.shape[0]))
+#                 ori_image_mask = ori_image_mask.astype(np.uint8)
+#                 bbox_mask = bbox_mask.astype(np.uint8)
+#                 mask_with_bounding_boxes = cv2.bitwise_or(ori_image_mask, bbox_mask)
+#                 output_subdir = os.path.join(output_dir, os.path.basename(os.path.dirname(image_path)))
+#                 output_subdir = f"{output_subdir}_intersection_of_0.1"
+#                 os.makedirs(output_subdir, exist_ok=True)
+#                 output_file_path = os.path.join(output_subdir, f"{mask_image_name}_output_mask.jpg")
+#                 cv2.imwrite(output_file_path, mask_with_bounding_boxes)
+
+#                 print(f"Processed {filename} in {time.time() - start_time:.2f} seconds")
+
+# if __name__ == "__main__":
+#     # input_directory = '/home/usama/Denoised_mask_results_3_july_2024/ma_canton/'
+#     input_directory = '/home/usama/Denoised_mask_results_3_july_2024/Clewiston-Zoning-Map-page-001_modified'
+#     # bounding_box_path = "/home/usama/EasyOcr_based_text_Erasing_latest_for_using/text_masks_results_july_13_2024_text_threshold_0.01/ma_cantontext_masktext_mask.png"
+#     bounding_box_path = '/home/usama/EasyOCR_high_resolution_text_localization/text_filled_bounding_box_masks_results_july_25_2024/Clewiston-Zoning-Map-page-001_modifiedtext_masktext_mask.png'
+#     output_directory = '/home/usama/text_erased_using_reteival_results_july_25_2024/'
+#     process_images(input_directory, output_directory, bounding_box_path)
 
 
 
